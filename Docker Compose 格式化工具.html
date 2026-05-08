@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Compose 格式化工具</title>
+    <!-- Tailwind CSS v3 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- highlight.js for syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/yaml.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#1E40AF',
+                        light: '#F9FAFB',
+                        success: '#10B981',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace'],
+                    },
+                    boxShadow: {
+                        'inner-lg': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .transition-height {
+                transition: height 0.3s ease;
+            }
+            .glass-effect {
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.18);
+            }
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a1a1a1;
+        }
+        
+        /* Code editor styles */
+        .code-editor {
+            font-family: 'Fira Code', monospace;
+            line-height: 1.5;
+            tab-size: 2;
+        }
+        
+        /* Animation for copy button */
+        @keyframes copySuccess {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        
+        .copy-success {
+            animation: copySuccess 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- Header -->
+        <header class="mb-8">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold text-primary flex items-center">
+                        <i class="fa fa-code mr-3"></i>
+                        Docker Compose 格式化工具
+                    </h1>
+                    <p class="text-gray-600 mt-1">快速格式化您的 docker-compose.yml 文件，提高可读性和规范性</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="https://github.com" target="_blank" class="p-2 rounded-full hover:bg-gray-200 transition-colors">
+                        <i class="fa fa-github" aria-hidden="true"></i>
+                    </a>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Main Content -->
+        <main class="relative">
+            <!-- Tooltip for first-time users -->
+            <div id="tooltip" class="hidden absolute top-0 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-md shadow-lg z-50">
+                <p>在左侧输入您的 docker-compose.yml 代码，右侧将自动格式化</p>
+                <div class="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 rotate-45 w-2 h-2 bg-gray-800"></div>
+            </div>
+            
+            <!-- Code Editor Container -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Input Editor -->
+                <div class="relative">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 class="text-lg font-semibold">原始代码</h2>
+                        <div class="flex justify-end">
+                            <button id="clear-btn" class="text-sm px-3 py-1 rounded-md bg-gray-200 hover:bg-gray-300 transition-colors">
+                                <i class="fa fa-trash-o mr-1"></i> 清空
+                            </button>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <textarea id="input-editor" class="code-editor w-full h-[600px] p-4 border border-gray-300 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-primary resize-none" placeholder="在此粘贴您的 docker-compose.yml 代码..."></textarea>
+                    </div>
+                </div>
+                
+                <!-- Output Editor -->
+                <div class="relative">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 class="text-lg font-semibold">格式化代码</h2>
+                        <button id="copy-btn" class="text-sm px-3 py-1 rounded-md bg-primary hover:bg-secondary text-white transition-colors">
+                            <i class="fa fa-clipboard mr-1"></i> 复制
+                        </button>
+                    </div>
+                    <div class="relative">
+                        <div style="position: relative; width: 100%; height: 600px; border: 1px solid #d1d5db; border-radius: 0.5rem; overflow: hidden;">
+                            <pre id="output-editor" class="code-editor w-full h-full p-4 bg-white" style="background-color: white; padding: 1rem; margin: 0; overflow: auto;"><code class="language-yaml hljs" style="background-color: white; display: block; min-width: min-content;"></code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Features Section -->
+            <div class="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 transition-all hover:shadow-lg">
+                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                        <i class="fa fa-magic text-primary text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">实时格式化</h3>
+                    <p class="text-gray-600">输入代码时自动进行格式优化，无需点击按钮触发，让您的工作流程更加流畅。</p>
+                </div>
+                
+                <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 transition-all hover:shadow-lg">
+                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                        <i class="fa fa-paint-brush text-green-600 text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">语法高亮</h3>
+                    <p class="text-gray-600">支持 YAML 语法高亮显示，提高代码可读性，让您轻松识别不同的代码元素。</p>
+                </div>
+                
+                <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 transition-all hover:shadow-lg">
+                    <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-4">
+                        <i class="fa fa-clipboard text-purple-600 text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">一键复制</h3>
+                    <p class="text-gray-600">一键复制格式化后的完整代码到剪贴板，方便您快速粘贴到其他应用程序中。</p>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Footer -->
+        <footer class="mt-16 pt-8 border-t border-gray-200 text-center text-gray-600">
+            <p>© 2025 Docker Compose 格式化工具 | 为开发者打造的高效工具</p>
+            <div class="mt-4 flex justify-center space-x-4">
+                <a href="#" class="hover:text-primary transition-colors">关于</a>
+                <a href="#" class="hover:text-primary transition-colors">隐私政策</a>
+                <a href="#" class="hover:text-primary transition-colors">使用条款</a>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // DOM Elements
+        const inputEditor = document.getElementById('input-editor');
+        const outputEditor = document.getElementById('output-editor');
+        const outputCode = outputEditor.querySelector('code');
+        const copyBtn = document.getElementById('copy-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const tooltip = document.getElementById('tooltip');
+        
+        // Sample docker-compose.yml content
+        const sampleContent = `version: '3.8'
+
+services:
+  web:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d
+      - ./nginx/html:/usr/share/nginx/html
+    restart: always
+
+  app:
+    build: ./app
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_USER=admin
+      - DB_PASSWORD=secret
+      - DB_NAME=mydb
+    volumes:
+      - ./app:/app
+    restart: unless-stopped
+
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=mydb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  postgres_data:
+`;
+
+        // Initialize the application
+        function init() {
+            // Show tooltip for first-time users
+            if (!localStorage.getItem('tooltipShown')) {
+                setTimeout(() => {
+                    tooltip.classList.remove('hidden');
+                    setTimeout(() => {
+                        tooltip.classList.add('hidden');
+                        localStorage.setItem('tooltipShown', 'true');
+                    }, 5000);
+                }, 1000);
+            }
+            
+            // Initialize input editor with sample content
+            inputEditor.value = sampleContent;
+            formatYaml();
+            
+            // Setup event listeners
+            setupEventListeners();
+        }
+        
+        // Setup event listeners
+        function setupEventListeners() {
+            // Input editor events
+            inputEditor.addEventListener('input', () => {
+                formatYaml();
+            });
+            
+            inputEditor.addEventListener('keydown', (e) => {
+                // Handle tab key
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const start = inputEditor.selectionStart;
+                    const end = inputEditor.selectionEnd;
+                    
+                    // Insert tab character
+                    inputEditor.value = inputEditor.value.substring(0, start) + '  ' + inputEditor.value.substring(end);
+                    
+                    // Move cursor position
+                    inputEditor.selectionStart = inputEditor.selectionEnd = start + 2;
+                    
+                    // Format after tab insertion
+                    formatYaml();
+                }
+            });
+            
+            // Copy button click event
+            copyBtn.addEventListener('click', () => {
+                try {
+                    // Get the text content from the output code element
+                    const textToCopy = outputCode.textContent || '';
+                    
+                    if (!textToCopy.trim()) {
+                        throw new Error('No content to copy');
+                    }
+                    
+                    // Create a temporary textarea element
+                    const textArea = document.createElement('textarea');
+                    textArea.value = textToCopy;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    textArea.style.opacity = '0';
+                    document.body.appendChild(textArea);
+                    
+                    // Focus and select the text
+                    textArea.focus();
+                    textArea.select();
+                    
+                    // Execute copy command
+                    const successful = document.execCommand('copy');
+                    
+                    // Clean up
+                    document.body.removeChild(textArea);
+                    
+                    if (successful) {
+                        // Show success feedback
+                        copyBtn.innerHTML = '<i class="fa fa-check mr-1"></i> 已复制';
+                        copyBtn.classList.add('copy-success', 'bg-success');
+                        
+                        setTimeout(() => {
+                            copyBtn.innerHTML = '<i class="fa fa-clipboard mr-1"></i> 复制';
+                            copyBtn.classList.remove('copy-success', 'bg-success');
+                        }, 2000);
+                    } else {
+                        throw new Error('Failed to copy text');
+                    }
+                    
+                } catch (err) {
+                    console.error('Failed to copy text: ', err);
+                    alert('复制失败，请手动选择并复制代码');
+                }
+            });
+            
+            // Clear button click event
+            clearBtn.addEventListener('click', () => {
+                inputEditor.value = '';
+                formatYaml();
+                inputEditor.focus();
+            });
+        }
+        
+        // Format YAML code
+        function formatYaml() {
+            const input = inputEditor.value;
+            
+            if (!input.trim()) {
+                outputCode.textContent = '';
+                return;
+            }
+            
+            try {
+                // Parse and stringify YAML to format it
+                const formattedYaml = formatYamlString(input);
+                
+                // Update output editor with formatted code
+                outputCode.textContent = formattedYaml;
+                
+                // Apply syntax highlighting
+                hljs.highlightElement(outputCode);
+            } catch (error) {
+                // If parsing fails, just show the original input
+                outputCode.textContent = input;
+                
+                // Apply syntax highlighting
+                hljs.highlightElement(outputCode);
+            }
+        }
+        
+        // Format YAML string with proper Docker Compose indentation
+        function formatYamlString(yamlString) {
+            const lines = yamlString.split('\n');
+            const formattedLines = [];
+            const indentSize = 2;
+            
+            // Track indentation levels for different sections
+            const indentStack = [];
+            let currentIndent = 0;
+            
+            lines.forEach(line => {
+                const trimmedLine = line.trim();
+                
+                // Skip empty lines
+                if (!trimmedLine) {
+                    formattedLines.push('');
+                    return;
+                }
+                
+                // Handle comments
+                if (trimmedLine.startsWith('#')) {
+                    formattedLines.push(' '.repeat(currentIndent * indentSize) + trimmedLine);
+                    return;
+                }
+                
+                // Calculate current line's base indentation
+                const baseIndent = Math.floor((line.length - trimmedLine.length) / indentSize);
+                
+                // Adjust indentation based on YAML structure
+                if (baseIndent < currentIndent) {
+                    // Decrease indentation level
+                    currentIndent = baseIndent;
+                }
+                
+                // Check if this line is a key-value pair or section header
+                if (trimmedLine.includes(':') && !trimmedLine.startsWith('- ')) {
+                    // This is a key or section header
+                    
+                    // Add properly indented line
+                    formattedLines.push(' '.repeat(currentIndent * indentSize) + trimmedLine);
+                    
+                    // If line ends with a colon and is not a key-value pair (like "key: value")
+                    // or is a section header in Docker Compose (like "services:", "volumes:", etc.)
+                    if (trimmedLine.endsWith(':') && !trimmedLine.includes(': ')) {
+                        // Increase indentation for the next line
+                        currentIndent++;
+                    }
+                } 
+                // Handle list items (like in ports, volumes, environment)
+                else if (trimmedLine.startsWith('- ')) {
+                    // List items should be at the same indentation level
+                    formattedLines.push(' '.repeat(currentIndent * indentSize) + trimmedLine);
+                }
+                // Handle continuation lines
+                else {
+                    // This is likely a continuation of the previous line
+                    formattedLines.push(' '.repeat((currentIndent + 1) * indentSize) + trimmedLine);
+                }
+            });
+            
+            return formattedLines.join('\n');
+        }
+        
+        // Initialize the application when DOM is loaded
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
